@@ -20,6 +20,8 @@ log = "0.4"
 managed = { version = "0.8", default-features = false }
 num-traits = { version = "0.2", default-features = false }
 paste = "1.0"
+async-trait = {version = "0.1.61", optional = true}
+maybe-async = { version = "0.2" }
 
 [dev-dependencies]
 gdbstub_arch = { path = "./gdbstub_arch/" }
@@ -29,11 +31,13 @@ pretty_env_logger = "0.4"
 goblin = "0.4"
 
 [features]
-default = ["std", "trace-pkt"]
+default = ["std", "trace-pkt", "sync"]
 alloc = ["managed/alloc"]
 std = ["alloc"]
 trace-pkt = ["alloc"]
 paranoid_unsafe = []
+sync = ["maybe-async/is_sync"]
+async = ["dep:async-trait", "alloc"]
 
 # INTERNAL: enables the `__dead_code_marker!` macro.
 # used as part of the `scripts/test_dead_code_elim.sh`
@@ -49,4 +53,4 @@ required-features = ["std"]
 
 [workspace]
 members = ["gdbstub_arch"]
-exclude = ["example_no_std"]
+exclude = ["examples_no_std"]
