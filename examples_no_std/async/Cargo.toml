@@ -1,0 +1,25 @@
+[package]
+name = "gdbstub-nostd"
+version = "0.1.0"
+authors = ["Daniel Prilik <danielprilik@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+gdbstub = { path = "../../", default-features = false, features = ["async", "alloc"] }
+gdbstub_arch = { path = "../../gdbstub_arch", default-features = false }
+
+libc = { version = "0.2", default-features = false }
+log = { version = "0.4", features = ["release_max_level_off"] }
+
+futures = { version = "0.3", default-features = false }
+async-trait = {version = "0.1.61"}
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = 's'  # Optimize for size.
+lto = true
+codegen-units = 1
+debug = true
