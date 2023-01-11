@@ -3,19 +3,19 @@ use crate::conn::ConnectionExt;
 
 use alloc::boxed::Box;
 
-impl<E> Connection for Box<dyn Connection<Error = E>> {
+impl<C:Connection<Error = E> + ?Sized, E> Connection for Box<&mut C> {
     type Error = E;
 
-    fn write(&mut self, byte: u8) -> Result<(), Self::Error> {
-        (**self).write(byte)
+    async fn write(&mut self, byte: u8) -> Result<(), Self::Error> {
+        (**self).write(byte).await
     }
 
-    fn write_all(&mut self, buf: &[u8]) -> Result<(), Self::Error> {
-        (**self).write_all(buf)
+    async fn write_all(&mut self, buf: &[u8]) -> Result<(), Self::Error> {
+        (**self).write_all(buf).await
     }
 
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        (**self).flush()
+    async fn flush(&mut self) -> Result<(), Self::Error> {
+        (**self).flush().await
     }
 
     fn on_session_start(&mut self) -> Result<(), Self::Error> {
@@ -23,29 +23,9 @@ impl<E> Connection for Box<dyn Connection<Error = E>> {
     }
 }
 
-impl<E> Connection for Box<dyn ConnectionExt<Error = E>> {
-    type Error = E;
-
-    fn write(&mut self, byte: u8) -> Result<(), Self::Error> {
-        (**self).write(byte)
-    }
-
-    fn write_all(&mut self, buf: &[u8]) -> Result<(), Self::Error> {
-        (**self).write_all(buf)
-    }
-
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        (**self).flush()
-    }
-
-    fn on_session_start(&mut self) -> Result<(), Self::Error> {
-        (**self).on_session_start()
-    }
-}
-
-impl<E> ConnectionExt for Box<dyn ConnectionExt<Error = E>> {
-    fn read(&mut self) -> Result<u8, Self::Error> {
-        (**self).read()
+impl<C:ConnectionExt<Error = E> + ?Sized, E> ConnectionExt for Box<&mut C> {
+    async fn read(&mut self) -> Result<u8, Self::Error> {
+        (**self).read().await
     }
 
     fn peek(&mut self) -> Result<Option<u8>, Self::Error> {
