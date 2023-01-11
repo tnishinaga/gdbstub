@@ -2,7 +2,7 @@ use super::prelude::*;
 use crate::protocol::commands::ext::MemoryMap;
 
 impl<T: Target, C: Connection> GdbStubImpl<T, C> {
-    pub(crate) fn handle_memory_map(
+    pub(crate) async fn handle_memory_map(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -21,11 +21,11 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                     .memory_map_xml(cmd.offset, cmd.length, cmd.buf)
                     .handle_error()?;
                 if ret == 0 {
-                    res.write_str("l")?;
+                    res.write_str("l").await?;
                 } else {
-                    res.write_str("m")?;
+                    res.write_str("m").await?;
                     // TODO: add more specific error variant?
-                    res.write_binary(cmd.buf.get(..ret).ok_or(Error::PacketBufferOverflow)?)?;
+                    res.write_binary(cmd.buf.get(..ret).ok_or(Error::PacketBufferOverflow)?).await?;
                 }
                 HandlerStatus::Handled
             }

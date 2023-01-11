@@ -3,7 +3,7 @@ use crate::protocol::commands::ext::ThreadExtraInfo;
 use crate::target::ext::base::BaseOps;
 
 impl<T: Target, C: Connection> GdbStubImpl<T, C> {
-    pub(crate) fn handle_thread_extra_info<'a>(
+    pub(crate) async fn handle_thread_extra_info<'a>(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -26,7 +26,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                     .map_err(Error::TargetError)?;
                 let data = info.buf.get(..size).ok_or(Error::PacketBufferOverflow)?;
 
-                res.write_hex_buf(data)?;
+                res.write_hex_buf(data).await?;
 
                 HandlerStatus::Handled
             }

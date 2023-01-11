@@ -5,7 +5,7 @@ use crate::arch::Arch;
 use crate::target::ext::host_io::{HostIoError, HostIoStat};
 
 impl<T: Target, C: Connection> GdbStubImpl<T, C> {
-    pub(crate) fn handle_host_io(
+    pub(crate) async fn handle_host_io(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -23,8 +23,8 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 match $ret {
                     Ok($val) => $callback,
                     Err(HostIoError::Errno(errno)) => {
-                        res.write_str("F-1,")?;
-                        res.write_num(errno as u32)?;
+                        res.write_str("F-1,").await?;
+                        res.write_num(errno as u32).await?;
                     }
                     Err(HostIoError::Fatal(e)) => return Err(Error::TargetError(e)),
                 }
@@ -36,8 +36,8 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 let ops = ops.support_open().unwrap();
                 handle_hostio_result! {
                     if let Ok(fd) = ops.open(cmd.filename, cmd.flags, cmd.mode) => {
-                        res.write_str("F")?;
-                        res.write_num(fd)?;
+                        res.write_str("F").await?;
+                        res.write_num(fd).await?;
                     }
                 }
                 HandlerStatus::Handled
@@ -46,7 +46,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 let ops = ops.support_close().unwrap();
                 handle_hostio_result! {
                     if let Ok(()) = ops.close(cmd.fd) => {
-                        res.write_str("F0")?;
+                        res.write_str("F0").await?;
                     }
                 }
                 HandlerStatus::Handled
@@ -55,10 +55,10 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 let ops = ops.support_pread().unwrap();
                 handle_hostio_result! {
                     if let Ok(ret) = ops.pread(cmd.fd, cmd.count, cmd.offset, cmd.buf) => {
-                        res.write_str("F")?;
-                        res.write_num(ret)?;
-                        res.write_str(";")?;
-                        res.write_binary(cmd.buf.get(..ret).ok_or(Error::PacketBufferOverflow)?)?;
+                        res.write_str("F").await?;
+                        res.write_num(ret).await?;
+                        res.write_str(";").await?;
+                        res.write_binary(cmd.buf.get(..ret).ok_or(Error::PacketBufferOverflow)?).await?;
                     }
                 };
 
@@ -70,8 +70,8 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 let ops = ops.support_pwrite().unwrap();
                 handle_hostio_result! {
                     if let Ok(ret) = ops.pwrite(cmd.fd, offset, cmd.data) => {
-                        res.write_str("F")?;
-                        res.write_num(ret)?;
+                        res.write_str("F").await?;
+                        res.write_num(ret).await?;
                     }
                 };
                 HandlerStatus::Handled
@@ -81,22 +81,22 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 handle_hostio_result! {
                     if let Ok(stat) = ops.fstat(cmd.fd) => {
                         let size = core::mem::size_of::<HostIoStat>();
-                        res.write_str("F")?;
-                        res.write_num(size)?;
-                        res.write_str(";")?;
-                        res.write_binary(&stat.st_dev.to_be_bytes())?;
-                        res.write_binary(&stat.st_ino.to_be_bytes())?;
-                        res.write_binary(&(stat.st_mode.bits()).to_be_bytes())?;
-                        res.write_binary(&stat.st_nlink.to_be_bytes())?;
-                        res.write_binary(&stat.st_uid.to_be_bytes())?;
-                        res.write_binary(&stat.st_gid.to_be_bytes())?;
-                        res.write_binary(&stat.st_rdev.to_be_bytes())?;
-                        res.write_binary(&stat.st_size.to_be_bytes())?;
-                        res.write_binary(&stat.st_blksize.to_be_bytes())?;
-                        res.write_binary(&stat.st_blocks.to_be_bytes())?;
-                        res.write_binary(&stat.st_atime.to_be_bytes())?;
-                        res.write_binary(&stat.st_mtime.to_be_bytes())?;
-                        res.write_binary(&stat.st_ctime.to_be_bytes())?;
+                        res.write_str("F").await?;
+                        res.write_num(size).await?;
+                        res.write_str(";").await?;
+                        res.write_binary(&stat.st_dev.to_be_bytes()).await?;
+                        res.write_binary(&stat.st_ino.to_be_bytes()).await?;
+                        res.write_binary(&(stat.st_mode.bits()).to_be_bytes()).await?;
+                        res.write_binary(&stat.st_nlink.to_be_bytes()).await?;
+                        res.write_binary(&stat.st_uid.to_be_bytes()).await?;
+                        res.write_binary(&stat.st_gid.to_be_bytes()).await?;
+                        res.write_binary(&stat.st_rdev.to_be_bytes()).await?;
+                        res.write_binary(&stat.st_size.to_be_bytes()).await?;
+                        res.write_binary(&stat.st_blksize.to_be_bytes()).await?;
+                        res.write_binary(&stat.st_blocks.to_be_bytes()).await?;
+                        res.write_binary(&stat.st_atime.to_be_bytes()).await?;
+                        res.write_binary(&stat.st_mtime.to_be_bytes()).await?;
+                        res.write_binary(&stat.st_ctime.to_be_bytes()).await?;
                     }
                 };
                 HandlerStatus::Handled
@@ -105,7 +105,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 let ops = ops.support_unlink().unwrap();
                 handle_hostio_result! {
                     if let Ok(()) = ops.unlink(cmd.filename) => {
-                        res.write_str("F0")?;
+                        res.write_str("F0").await?;
                     }
                 };
                 HandlerStatus::Handled
@@ -114,10 +114,10 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 let ops = ops.support_readlink().unwrap();
                 handle_hostio_result! {
                     if let Ok(ret) = ops.readlink(cmd.filename, cmd.buf) => {
-                        res.write_str("F")?;
-                        res.write_num(ret)?;
-                        res.write_str(";")?;
-                        res.write_binary(cmd.buf.get(..ret).ok_or(Error::PacketBufferOverflow)?)?;
+                        res.write_str("F").await?;
+                        res.write_num(ret).await?;
+                        res.write_str(";").await?;
+                        res.write_binary(cmd.buf.get(..ret).ok_or(Error::PacketBufferOverflow)?).await?;
                     }
                 };
 
@@ -127,7 +127,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 let ops = ops.support_setfs().unwrap();
                 handle_hostio_result! {
                     if let Ok(()) = ops.setfs(cmd.fs) => {
-                        res.write_str("F0")?;
+                        res.write_str("F0").await?;
                     }
                 };
                 HandlerStatus::Handled

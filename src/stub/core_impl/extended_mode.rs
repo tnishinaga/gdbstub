@@ -2,7 +2,7 @@ use super::prelude::*;
 use crate::protocol::commands::ext::ExtendedMode;
 
 impl<T: Target, C: Connection> GdbStubImpl<T, C> {
-    pub(crate) fn handle_extended_mode<'a>(
+    pub(crate) async fn handle_extended_mode<'a>(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -39,7 +39,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
 
                 // This is a reasonable response, as the `run` handler must
                 // spawn the process in a stopped state.
-                res.write_str("S05")?;
+                res.write_str("S05").await?;
                 HandlerStatus::Handled
             }
             // --------- ASLR --------- //

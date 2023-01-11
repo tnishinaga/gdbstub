@@ -128,7 +128,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
         }
     }
 
-    pub fn handle_packet(
+    pub async fn handle_packet(
         &mut self,
         target: &mut T,
         conn: &mut C,
@@ -144,14 +144,14 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
             Packet::Command(command) => {
                 // Acknowledge the command
                 if !self.features.no_ack_mode() {
-                    conn.write(b'+').map_err(Error::ConnectionWrite)?;
+                    conn.write(b'+').await.map_err(Error::ConnectionWrite)?;
                 }
 
                 let mut res = ResponseWriter::new(conn, target.use_rle());
-                let disconnect_reason = match self.handle_command(&mut res, target, command) {
+                let disconnect_reason = match self.handle_command(&mut res, target, command).await {
                     Ok(HandlerStatus::Handled) => None,
                     Ok(HandlerStatus::NeedsOk) => {
-                        res.write_str("OK")?;
+                        res.write_str("OK").await?;
                         None
                     }
                     Ok(HandlerStatus::DeferredStopReason) => return Ok(State::DeferredStopReason),
@@ -159,8 +159,8 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                     // HACK: handling this "dummy" error is required as part of the
                     // `TargetResultExt::handle_error()` machinery.
                     Err(Error::NonFatalError(code)) => {
-                        res.write_str("E")?;
-                        res.write_num(code)?;
+                        res.write_str("E").await?;
+                        res.write_num(code).await?;
                         None
                     }
                     Err(e) => return Err(e),
@@ -170,7 +170,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 // packet, but ONLY when extended mode is NOT implemented.
                 let is_kill = matches!(disconnect_reason, Some(DisconnectReason::Kill));
                 if !(target.support_extended_mode().is_none() && is_kill) {
-                    res.flush()?;
+                    res.flush().await?;
                 }
 
                 let state = match disconnect_reason {
@@ -183,7 +183,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
         }
     }
 
-    fn handle_command(
+    async fn handle_command(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -191,17 +191,17 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
     ) -> Result<HandlerStatus, Error<T::Error, C::Error>> {
         match cmd {
             // `handle_X` methods are defined in the `ext` module
-            Command::Base(cmd) => self.handle_base(res, target, cmd),
-            Command::TargetXml(cmd) => self.handle_target_xml(res, target, cmd),
-            Command::Resume(cmd) => self.handle_stop_resume(res, target, cmd),
+            Command::Base(cmd) => self.handle_base(res, target, cmd).await,
+            Command::TargetXml(cmd) => self.handle_target_xml(res, target, cmd).await,
+            Command::Resume(cmd) => self.handle_stop_resume(res, target, cmd).await,
             Command::XUpcasePacket(cmd) => self.handle_x_upcase_packet(res, target, cmd),
             Command::SingleRegisterAccess(cmd) => {
-                self.handle_single_register_access(res, target, cmd)
+                self.handle_single_register_access(res, target, cmd).await
             }
             Command::Breakpoints(cmd) => self.handle_breakpoints(res, target, cmd),
             Command::CatchSyscalls(cmd) => self.handle_catch_syscalls(res, target, cmd),
             Command::ExtendedMode(cmd) => self.handle_extended_mode(res, target, cmd),
-            Command::MonitorCmd(cmd) => self.handle_monitor_cmd(res, target, cmd),
+            Command::MonitorCmd(cmd) => self.handle_monitor_cmd(res, target, cmd).await,
             Command::SectionOffsets(cmd) => self.handle_section_offsets(res, target, cmd),
             Command::ReverseCont(cmd) => self.handle_reverse_cont(res, target, cmd),
             Command::ReverseStep(cmd) => self.handle_reverse_step(res, target, cmd),
@@ -228,12 +228,12 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                         // TODO: omit this message if non-stop mode is active
                         {
                             let mut res = ResponseWriter::new(res.as_conn(), target.use_rle());
-                            res.write_str("O")?;
-                            res.write_hex_buf(b"target has not implemented `support_resume()`\n")?;
-                            res.flush()?;
+                            res.write_str("O").await?;
+                            res.write_hex_buf(b"target has not implemented `support_resume()`\n").await?;
+                            res.flush().await?;
                         }
 
-                        res.write_str("S05")?;
+                        res.write_str("S05").await?;
                     }
                 }
 

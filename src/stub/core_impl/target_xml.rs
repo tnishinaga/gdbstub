@@ -4,7 +4,7 @@ use crate::protocol::commands::ext::TargetXml;
 use crate::arch::Arch;
 
 impl<T: Target, C: Connection> GdbStubImpl<T, C> {
-    pub(crate) fn handle_target_xml(
+    pub(crate) async fn handle_target_xml(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -48,11 +48,11 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 };
 
                 if ret == 0 {
-                    res.write_str("l")?;
+                    res.write_str("l").await?;
                 } else {
-                    res.write_str("m")?;
+                    res.write_str("m").await?;
                     // TODO: add more specific error variant?
-                    res.write_binary(cmd.buf.get(..ret).ok_or(Error::PacketBufferOverflow)?)?;
+                    res.write_binary(cmd.buf.get(..ret).ok_or(Error::PacketBufferOverflow)?).await?;
                 }
                 HandlerStatus::Handled
             }

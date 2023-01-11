@@ -208,7 +208,7 @@ impl<'a, T: Target, C: Connection> GdbStubStateMachineInner<'a, state::Idle<T>, 
     }
 
     /// Pass a byte to the GDB stub.
-    pub fn incoming_data(
+    pub async fn incoming_data(
         mut self,
         target: &mut T,
         byte: u8,
@@ -222,7 +222,7 @@ impl<'a, T: Target, C: Connection> GdbStubStateMachineInner<'a, state::Idle<T>, 
         let state = self
             .i
             .inner
-            .handle_packet(target, &mut self.i.conn, packet)?;
+            .handle_packet(target, &mut self.i.conn, packet).await?;
         Ok(match state {
             State::Pump => self.into(),
             State::Disconnect(reason) => self.transition(state::Disconnected { reason }).into(),
@@ -233,7 +233,7 @@ impl<'a, T: Target, C: Connection> GdbStubStateMachineInner<'a, state::Idle<T>, 
                     Some(reason) => {
                         return self
                             .transition(state::Running {})
-                            .report_stop(target, reason)
+                            .report_stop(target, reason).await
                     }
                     // otherwise, just transition into the running state as usual
                     None => self.transition(state::Running {}).into(),
@@ -250,14 +250,14 @@ impl<'a, T: Target, C: Connection> GdbStubStateMachineInner<'a, state::Idle<T>, 
 /// [`GdbStubStateMachine::Running`] state.
 impl<'a, T: Target, C: Connection> GdbStubStateMachineInner<'a, state::Running, T, C> {
     /// Report a target stop reason back to GDB.
-    pub fn report_stop(
+    pub async fn report_stop(
         mut self,
         target: &mut T,
         reason: impl IntoStopReason<T>,
     ) -> Result<GdbStubStateMachine<'a, T, C>, Error<T::Error, C::Error>> {
         let mut res = ResponseWriter::new(&mut self.i.conn, target.use_rle());
-        let event = self.i.inner.finish_exec(&mut res, target, reason.into())?;
-        res.flush()?;
+        let event = self.i.inner.finish_exec(&mut res, target, reason.into()).await?;
+        res.flush().await?;
 
         Ok(match event {
             FinishExecStatus::Handled => self
@@ -276,7 +276,7 @@ impl<'a, T: Target, C: Connection> GdbStubStateMachineInner<'a, state::Running, 
     /// NOTE: unlike the `incoming_data` method in the `state::Idle` state,
     /// this method does not perform any state transitions, and will
     /// return a `GdbStubStateMachineInner` in the `state::Running` state.
-    pub fn incoming_data(
+    pub async fn incoming_data(
         mut self,
         target: &mut T,
         byte: u8,
@@ -290,7 +290,7 @@ impl<'a, T: Target, C: Connection> GdbStubStateMachineInner<'a, state::Running, 
         let state = self
             .i
             .inner
-            .handle_packet(target, &mut self.i.conn, packet)?;
+            .handle_packet(target, &mut self.i.conn, packet).await?;
         Ok(match state {
             State::Pump => self.transition(state::Running {}).into(),
             State::Disconnect(reason) => self.transition(state::Disconnected { reason }).into(),
@@ -329,7 +329,7 @@ impl<'a, T: Target, C: Connection> GdbStubStateMachineInner<'a, state::CtrlCInte
     /// - If the stub is successful at interrupting the running program, it
     ///   should send one of the stop reply packets (see Stop Reply Packets) to
     ///   GDB as a result of successfully stopping the program
-    pub fn interrupt_handled(
+    pub async fn interrupt_handled(
         self,
         target: &mut T,
         stop_reason: Option<impl IntoStopReason<T>>,
@@ -345,7 +345,7 @@ impl<'a, T: Target, C: Connection> GdbStubStateMachineInner<'a, state::CtrlCInte
             // target is running - we can immediately report the stop reason
             let gdb = self.transition(state::Running {});
             match stop_reason {
-                Some(reason) => gdb.report_stop(target, reason),
+                Some(reason) => gdb.report_stop(target, reason).await,
                 None => Ok(gdb.into()),
             }
         }

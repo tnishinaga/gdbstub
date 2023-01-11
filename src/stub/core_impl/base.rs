@@ -34,7 +34,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
         Ok(tid)
     }
 
-    pub(crate) fn handle_base<'a>(
+    pub(crate) async fn handle_base<'a>(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -62,15 +62,15 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                     }
                 }
 
-                res.write_str("PacketSize=")?;
-                res.write_num(cmd.packet_buffer_len)?;
+                res.write_str("PacketSize=").await?;
+                res.write_num(cmd.packet_buffer_len).await?;
 
                 // these are the few features that gdbstub unconditionally supports
                 res.write_str(concat!(
                     ";vContSupported+",
                     ";multiprocess+",
                     ";QStartNoAckMode+",
-                ))?;
+                )).await?;
 
                 if let Some(resume_ops) = target.base_ops().resume_ops() {
                     let (reverse_cont, reverse_step) = match resume_ops {
@@ -85,67 +85,67 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                     };
 
                     if reverse_cont {
-                        res.write_str(";ReverseContinue+")?;
+                        res.write_str(";ReverseContinue+").await?;
                     }
 
                     if reverse_step {
-                        res.write_str(";ReverseStep+")?;
+                        res.write_str(";ReverseStep+").await?;
                     }
                 }
 
                 if let Some(ops) = target.support_extended_mode() {
                     if ops.support_configure_aslr().is_some() {
-                        res.write_str(";QDisableRandomization+")?;
+                        res.write_str(";QDisableRandomization+").await?;
                     }
 
                     if ops.support_configure_env().is_some() {
-                        res.write_str(";QEnvironmentHexEncoded+")?;
-                        res.write_str(";QEnvironmentUnset+")?;
-                        res.write_str(";QEnvironmentReset+")?;
+                        res.write_str(";QEnvironmentHexEncoded+").await?;
+                        res.write_str(";QEnvironmentUnset+").await?;
+                        res.write_str(";QEnvironmentReset+").await?;
                     }
 
                     if ops.support_configure_startup_shell().is_some() {
-                        res.write_str(";QStartupWithShell+")?;
+                        res.write_str(";QStartupWithShell+").await?;
                     }
 
                     if ops.support_configure_working_dir().is_some() {
-                        res.write_str(";QSetWorkingDir+")?;
+                        res.write_str(";QSetWorkingDir+").await?;
                     }
                 }
 
                 if let Some(ops) = target.support_breakpoints() {
                     if ops.support_sw_breakpoint().is_some() {
-                        res.write_str(";swbreak+")?;
+                        res.write_str(";swbreak+").await?;
                     }
 
                     if ops.support_hw_breakpoint().is_some()
                         || ops.support_hw_watchpoint().is_some()
                     {
-                        res.write_str(";hwbreak+")?;
+                        res.write_str(";hwbreak+").await?;
                     }
                 }
 
                 if target.support_catch_syscalls().is_some() {
-                    res.write_str(";QCatchSyscalls+")?;
+                    res.write_str(";QCatchSyscalls+").await?;
                 }
 
                 if target.use_target_description_xml()
                     && (T::Arch::target_description_xml().is_some()
                         || target.support_target_description_xml_override().is_some())
                 {
-                    res.write_str(";qXfer:features:read+")?;
+                    res.write_str(";qXfer:features:read+").await?;
                 }
 
                 if target.support_memory_map().is_some() {
-                    res.write_str(";qXfer:memory-map:read+")?;
+                    res.write_str(";qXfer:memory-map:read+").await?;
                 }
 
                 if target.support_exec_file().is_some() {
-                    res.write_str(";qXfer:exec-file:read+")?;
+                    res.write_str(";qXfer:exec-file:read+").await?;
                 }
 
                 if target.support_auxv().is_some() {
-                    res.write_str(";qXfer:auxv:read+")?;
+                    res.write_str(";qXfer:auxv:read+").await?;
                 }
 
                 HandlerStatus::Handled
@@ -161,15 +161,15 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
             Base::QuestionMark(_) => {
                 // Reply with a valid thread-id or GDB issues a warning when more
                 // than one thread is active
-                res.write_str("T05thread:")?;
+                res.write_str("T05thread:").await?;
                 res.write_specific_thread_id(SpecificThreadId {
                     pid: self
                         .features
                         .multiprocess()
                         .then_some(SpecificIdKind::WithId(FAKE_PID)),
                     tid: SpecificIdKind::WithId(self.get_sane_any_tid(target)?),
-                })?;
-                res.write_str(";")?;
+                }).await?;
+                res.write_str(";").await?;
                 HandlerStatus::Handled
             }
             Base::qAttached(cmd) => {
@@ -185,7 +185,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                         }
                     }
                 };
-                res.write_str(if is_attached { "1" } else { "0" })?;
+                res.write_str(if is_attached { "1" } else { "0" }).await?;
                 HandlerStatus::Handled
             }
             Base::g(_) => {
@@ -199,10 +199,10 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 .handle_error()?;
 
                 let mut err = Ok(());
-                regs.gdb_serialize(|val| {
+                regs.gdb_serialize(async |val| {
                     let res = match val {
-                        Some(b) => res.write_hex_buf(&[b]),
-                        None => res.write_str("xx"),
+                        Some(b) => res.write_hex_buf(&[b]).await,
+                        None => res.write_str("xx").await,
                     };
                     if let Err(e) = res {
                         err = Err(e);
@@ -249,7 +249,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                     n -= chunk_size;
                     i += chunk_size;
 
-                    res.write_hex_buf(data)?;
+                    res.write_hex_buf(data).await?;
                 }
                 HandlerStatus::Handled
             }
@@ -283,7 +283,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                         let should_terminate = ops.kill(pid).handle_error()?;
                         if should_terminate.into_bool() {
                             // manually write OK, since we need to return a DisconnectReason
-                            res.write_str("OK")?;
+                            res.write_str("OK").await?;
                             HandlerStatus::Disconnect(DisconnectReason::Kill)
                         } else {
                             HandlerStatus::NeedsOk
@@ -293,7 +293,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
             }
             Base::D(_) => {
                 // TODO: plumb-through Pid when exposing full multiprocess + extended mode
-                res.write_str("OK")?; // manually write OK, since we need to return a DisconnectReason
+                res.write_str("OK").await?; // manually write OK, since we need to return a DisconnectReason
                 HandlerStatus::Disconnect(DisconnectReason::Disconnect)
             }
 
@@ -322,7 +322,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 HandlerStatus::NeedsOk
             }
             Base::qfThreadInfo(_) => {
-                res.write_str("m")?;
+                res.write_str("m").await?;
 
                 match target.base_ops() {
                     BaseOps::SingleThread(_) => res.write_specific_thread_id(SpecificThreadId {
@@ -331,15 +331,15 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                             .multiprocess()
                             .then_some(SpecificIdKind::WithId(FAKE_PID)),
                         tid: SpecificIdKind::WithId(SINGLE_THREAD_TID),
-                    })?,
+                    }).await?,
                     BaseOps::MultiThread(ops) => {
                         let mut err: Result<_, Error<T::Error, C::Error>> = Ok(());
                         let mut first = true;
                         ops.list_active_threads(&mut |tid| {
                             // TODO: replace this with a try block (once stabilized)
-                            let e = (|| {
+                            let e = (async || {
                                 if !first {
-                                    res.write_str(",")?
+                                    res.write_str(",").await?
                                 }
                                 first = false;
                                 res.write_specific_thread_id(SpecificThreadId {
@@ -348,7 +348,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                                         .multiprocess()
                                         .then_some(SpecificIdKind::WithId(FAKE_PID)),
                                     tid: SpecificIdKind::WithId(tid),
-                                })?;
+                                }).await?;
                                 Ok(())
                             })();
 
@@ -364,7 +364,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 HandlerStatus::Handled
             }
             Base::qsThreadInfo(_) => {
-                res.write_str("l")?;
+                res.write_str("l").await?;
                 HandlerStatus::Handled
             }
             Base::T(cmd) => {

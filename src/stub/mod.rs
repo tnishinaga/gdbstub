@@ -154,7 +154,7 @@ impl<'a, T: Target, C: Connection> GdbStub<'a, T, C> {
     /// etc...) you will need to interface with the underlying
     /// [`GdbStubStateMachine`](state_machine::GdbStubStateMachine) API
     /// directly.
-    pub fn run_blocking<E>(
+    pub async fn run_blocking<E>(
         self,
         target: &mut T,
     ) -> Result<DisconnectReason, Error<T::Error, C::Error>>
@@ -167,8 +167,8 @@ impl<'a, T: Target, C: Connection> GdbStub<'a, T, C> {
             gdb = match gdb {
                 state_machine::GdbStubStateMachine::Idle(mut gdb) => {
                     // needs more data, so perform a blocking read on the connection
-                    let byte = gdb.borrow_conn().read().map_err(Error::ConnectionRead)?;
-                    gdb.incoming_data(target, byte)?
+                    let byte = gdb.borrow_conn().read().await.map_err(Error::ConnectionRead)?;
+                    gdb.incoming_data(target, byte).await?
                 }
 
                 state_machine::GdbStubStateMachine::Disconnected(gdb) => {
@@ -180,7 +180,7 @@ impl<'a, T: Target, C: Connection> GdbStub<'a, T, C> {
                 state_machine::GdbStubStateMachine::CtrlCInterrupt(gdb) => {
                     // defer to the implementation on how it wants to handle the interrupt
                     let stop_reason = E::on_interrupt(target).map_err(Error::TargetError)?;
-                    gdb.interrupt_handled(target, stop_reason)?
+                    gdb.interrupt_handled(target, stop_reason).await?
                 }
 
                 state_machine::GdbStubStateMachine::Running(mut gdb) => {
@@ -190,11 +190,11 @@ impl<'a, T: Target, C: Connection> GdbStub<'a, T, C> {
                     let event = E::wait_for_stop_reason(target, gdb.borrow_conn());
                     match event {
                         Ok(BlockingEventLoopEvent::TargetStopped(stop_reason)) => {
-                            gdb.report_stop(target, stop_reason)?
+                            gdb.report_stop(target, stop_reason).await?
                         }
 
                         Ok(BlockingEventLoopEvent::IncomingData(byte)) => {
-                            gdb.incoming_data(target, byte)?
+                            gdb.incoming_data(target, byte).await?
                         }
 
                         Err(WaitForStopReasonError::Target(e)) => {

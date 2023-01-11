@@ -14,7 +14,7 @@ use crate::FAKE_PID;
 use super::DisconnectReason;
 
 impl<T: Target, C: Connection> GdbStubImpl<T, C> {
-    pub(crate) fn handle_stop_resume<'a>(
+    pub(crate) async fn handle_stop_resume<'a>(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -31,14 +31,14 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 match cmd {
                     vCont::Query => {
                         // Continue is part of the base protocol
-                        res.write_str("vCont;c;C")?;
+                        res.write_str("vCont;c;C").await?;
 
                         // Single stepping is optional
                         if match &mut ops {
                             ResumeOps::SingleThread(ops) => ops.support_single_step().is_some(),
                             ResumeOps::MultiThread(ops) => ops.support_single_step().is_some(),
                         } {
-                            res.write_str(";s;S")?;
+                            res.write_str(";s;S").await?;
                         }
 
                         // Range stepping is optional
@@ -46,7 +46,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                             ResumeOps::SingleThread(ops) => ops.support_range_step().is_some(),
                             ResumeOps::MultiThread(ops) => ops.support_range_step().is_some(),
                         } {
-                            res.write_str(";r")?;
+                            res.write_str(";r").await?;
                         }
 
                         // doesn't actually invoke vCont
@@ -254,34 +254,34 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
         Ok(HandlerStatus::DeferredStopReason)
     }
 
-    fn write_stop_common(
+    async fn write_stop_common(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         tid: Option<Tid>,
         signal: Signal,
     ) -> Result<(), Error<T::Error, C::Error>> {
-        res.write_str("T")?;
-        res.write_num(signal as u8)?;
+        res.write_str("T").await?;
+        res.write_num(signal as u8).await?;
 
         if let Some(tid) = tid {
             self.current_mem_tid = tid;
             self.current_resume_tid = SpecificIdKind::WithId(tid);
 
-            res.write_str("thread:")?;
+            res.write_str("thread:").await?;
             res.write_specific_thread_id(SpecificThreadId {
                 pid: self
                     .features
                     .multiprocess()
                     .then_some(SpecificIdKind::WithId(FAKE_PID)),
                 tid: SpecificIdKind::WithId(tid),
-            })?;
-            res.write_str(";")?;
+            }).await?;
+            res.write_str(";").await?;
         }
 
         Ok(())
     }
 
-    pub(crate) fn finish_exec(
+    pub(crate) async fn finish_exec(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -325,41 +325,41 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
 
         let status = match stop_reason {
             MultiThreadStopReason::DoneStep => {
-                res.write_str("S")?;
-                res.write_num(Signal::SIGTRAP as u8)?;
+                res.write_str("S").await?;
+                res.write_num(Signal::SIGTRAP as u8).await?;
                 FinishExecStatus::Handled
             }
             MultiThreadStopReason::Signal(sig) => {
-                res.write_str("S")?;
-                res.write_num(sig as u8)?;
+                res.write_str("S").await?;
+                res.write_num(sig as u8).await?;
                 FinishExecStatus::Handled
             }
             MultiThreadStopReason::Exited(code) => {
-                res.write_str("W")?;
-                res.write_num(code)?;
+                res.write_str("W").await?;
+                res.write_num(code).await?;
                 FinishExecStatus::Disconnect(DisconnectReason::TargetExited(code))
             }
             MultiThreadStopReason::Terminated(sig) => {
-                res.write_str("X")?;
-                res.write_num(sig as u8)?;
+                res.write_str("X").await?;
+                res.write_num(sig as u8).await?;
                 FinishExecStatus::Disconnect(DisconnectReason::TargetTerminated(sig))
             }
             MultiThreadStopReason::SignalWithThread { tid, signal } => {
-                self.write_stop_common(res, Some(tid), signal)?;
+                self.write_stop_common(res, Some(tid), signal).await?;
                 FinishExecStatus::Handled
             }
             MultiThreadStopReason::SwBreak(tid) if guard_break!(support_sw_breakpoint) => {
                 crate::__dead_code_marker!("sw_breakpoint", "stop_reason");
 
-                self.write_stop_common(res, Some(tid), Signal::SIGTRAP)?;
-                res.write_str("swbreak:;")?;
+                self.write_stop_common(res, Some(tid), Signal::SIGTRAP).await?;
+                res.write_str("swbreak:;").await?;
                 FinishExecStatus::Handled
             }
             MultiThreadStopReason::HwBreak(tid) if guard_break!(support_hw_breakpoint) => {
                 crate::__dead_code_marker!("hw_breakpoint", "stop_reason");
 
-                self.write_stop_common(res, Some(tid), Signal::SIGTRAP)?;
-                res.write_str("hwbreak:;")?;
+                self.write_stop_common(res, Some(tid), Signal::SIGTRAP).await?;
+                res.write_str("hwbreak:;").await?;
                 FinishExecStatus::Handled
             }
             MultiThreadStopReason::Watch { tid, kind, addr }
@@ -367,29 +367,29 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
             {
                 crate::__dead_code_marker!("hw_watchpoint", "stop_reason");
 
-                self.write_stop_common(res, Some(tid), Signal::SIGTRAP)?;
+                self.write_stop_common(res, Some(tid), Signal::SIGTRAP).await?;
 
                 use crate::target::ext::breakpoints::WatchKind;
                 match kind {
-                    WatchKind::Write => res.write_str("watch:")?,
-                    WatchKind::Read => res.write_str("rwatch:")?,
-                    WatchKind::ReadWrite => res.write_str("awatch:")?,
+                    WatchKind::Write => res.write_str("watch:").await?,
+                    WatchKind::Read => res.write_str("rwatch:").await?,
+                    WatchKind::ReadWrite => res.write_str("awatch:").await?,
                 }
-                res.write_num(addr)?;
-                res.write_str(";")?;
+                res.write_num(addr).await?;
+                res.write_str(";").await?;
                 FinishExecStatus::Handled
             }
             MultiThreadStopReason::ReplayLog { tid, pos } if guard_reverse_exec!() => {
                 crate::__dead_code_marker!("reverse_exec", "stop_reason");
 
-                self.write_stop_common(res, tid, Signal::SIGTRAP)?;
+                self.write_stop_common(res, tid, Signal::SIGTRAP).await?;
 
-                res.write_str("replaylog:")?;
+                res.write_str("replaylog:").await?;
                 res.write_str(match pos {
                     ReplayLogPosition::Begin => "begin",
                     ReplayLogPosition::End => "end",
-                })?;
-                res.write_str(";")?;
+                }).await?;
+                res.write_str(";").await?;
 
                 FinishExecStatus::Handled
             }
@@ -400,14 +400,14 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
             } if guard_catch_syscall!() => {
                 crate::__dead_code_marker!("catch_syscall", "stop_reason");
 
-                self.write_stop_common(res, tid, Signal::SIGTRAP)?;
+                self.write_stop_common(res, tid, Signal::SIGTRAP).await?;
 
                 res.write_str(match position {
                     CatchSyscallPosition::Entry => "syscall_entry:",
                     CatchSyscallPosition::Return => "syscall_return:",
-                })?;
-                res.write_num(number)?;
-                res.write_str(";")?;
+                }).await?;
+                res.write_num(number).await?;
+                res.write_str(";").await?;
 
                 FinishExecStatus::Handled
             }

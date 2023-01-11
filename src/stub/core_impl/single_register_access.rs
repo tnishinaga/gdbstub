@@ -5,7 +5,7 @@ use crate::arch::{Arch, RegId};
 use crate::target::ext::base::BaseOps;
 
 impl<T: Target, C: Connection> GdbStubImpl<T, C> {
-    fn inner<Tid>(
+    async fn inner<Tid>(
         res: &mut ResponseWriter<'_, C>,
         ops: crate::target::ext::base::single_register_access::SingleRegisterAccessOps<'_, Tid, T>,
         command: SingleRegisterAccess<'_>,
@@ -36,7 +36,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 if len == 0 {
                     if let Some(size) = reg_size {
                         for _ in 0..size.get() {
-                            res.write_str("xx")?;
+                            res.write_str("xx").await?;
                         }
                     } else {
                         return Err(Error::TargetMismatch);
@@ -49,7 +49,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                     } else {
                         buf = buf.get_mut(..len).ok_or(Error::PacketBufferOverflow)?;
                     }
-                    res.write_hex_buf(buf)?;
+                    res.write_hex_buf(buf).await?;
                 }
                 HandlerStatus::Handled
             }
@@ -67,7 +67,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
         Ok(handler_status)
     }
 
-    pub(crate) fn handle_single_register_access<'a>(
+    pub(crate) async fn handle_single_register_access<'a>(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -76,11 +76,11 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
         match target.base_ops() {
             BaseOps::SingleThread(ops) => match ops.support_single_register_access() {
                 None => Ok(HandlerStatus::Handled),
-                Some(ops) => Self::inner(res, ops, command, ()),
+                Some(ops) => Self::inner(res, ops, command, ()).await,
             },
             BaseOps::MultiThread(ops) => match ops.support_single_register_access() {
                 None => Ok(HandlerStatus::Handled),
-                Some(ops) => Self::inner(res, ops, command, self.current_mem_tid),
+                Some(ops) => Self::inner(res, ops, command, self.current_mem_tid).await,
             },
         }
     }

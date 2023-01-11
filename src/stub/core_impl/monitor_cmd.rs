@@ -4,7 +4,7 @@ use crate::protocol::commands::ext::MonitorCmd;
 use crate::protocol::ConsoleOutput;
 
 impl<T: Target, C: Connection> GdbStubImpl<T, C> {
-    pub(crate) fn handle_monitor_cmd<'a>(
+    pub(crate) async fn handle_monitor_cmd<'a>(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -24,11 +24,11 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 let mut err: Result<_, Error<T::Error, C::Error>> = Ok(());
                 let mut callback = |msg: &[u8]| {
                     // TODO: replace this with a try block (once stabilized)
-                    let e = (|| {
+                    let e = (async || {
                         let mut res = ResponseWriter::new(res.as_conn(), use_rle);
-                        res.write_str("O")?;
-                        res.write_hex_buf(msg)?;
-                        res.flush()?;
+                        res.write_str("O").await?;
+                        res.write_hex_buf(msg).await?;
+                        res.flush().await?;
                         Ok(())
                     })();
 

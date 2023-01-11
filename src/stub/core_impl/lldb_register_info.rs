@@ -5,7 +5,7 @@ use crate::arch::lldb::{Encoding, Format, Generic, Register, RegisterInfo as LLD
 use crate::arch::Arch;
 
 impl<T: Target, C: Connection> GdbStubImpl<T, C> {
-    pub(crate) fn handle_lldb_register_info(
+    pub(crate) async fn handle_lldb_register_info(
         &mut self,
         res: &mut ResponseWriter<'_, C>,
         target: &mut T,
@@ -21,25 +21,25 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 let cb = &mut |reg: Option<Register<'_>>| {
                     let res = match reg {
                         // TODO: replace this with a try block (once stabilized)
-                        Some(reg) => (|| {
-                            res.write_str("name:")?;
-                            res.write_str(reg.name)?;
+                        Some(reg) => (async || {
+                            res.write_str("name:").await?;
+                            res.write_str(reg.name).await?;
                             if let Some(alt_name) = reg.alt_name {
-                                res.write_str(";alt-name:")?;
-                                res.write_str(alt_name)?;
+                                res.write_str(";alt-name:").await?;
+                                res.write_str(alt_name).await?;
                             }
-                            res.write_str(";bitsize:")?;
-                            res.write_dec(reg.bitsize)?;
-                            res.write_str(";offset:")?;
-                            res.write_dec(reg.offset)?;
-                            res.write_str(";encoding:")?;
+                            res.write_str(";bitsize:").await?;
+                            res.write_dec(reg.bitsize).await?;
+                            res.write_str(";offset:").await?;
+                            res.write_dec(reg.offset).await?;
+                            res.write_str(";encoding:").await?;
                             res.write_str(match reg.encoding {
                                 Encoding::Uint => "uint",
                                 Encoding::Sint => "sint",
                                 Encoding::IEEE754 => "ieee754",
                                 Encoding::Vector => "vector",
-                            })?;
-                            res.write_str(";format:")?;
+                            }).await?;
+                            res.write_str(";format:").await?;
                             res.write_str(match reg.format {
                                 Format::Binary => "binary",
                                 Format::Decimal => "decimal",
@@ -53,19 +53,19 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                                 Format::VectorUInt32 => "vector-uint32",
                                 Format::VectorFloat32 => "vector-float32",
                                 Format::VectorUInt128 => "vector-uint128",
-                            })?;
-                            res.write_str(";set:")?;
-                            res.write_str(reg.set)?;
+                            }).await?;
+                            res.write_str(";set:").await?;
+                            res.write_str(reg.set).await?;
                             if let Some(gcc) = reg.gcc {
-                                res.write_str(";gcc:")?;
-                                res.write_dec(gcc)?;
+                                res.write_str(";gcc:").await?;
+                                res.write_dec(gcc).await?;
                             }
                             if let Some(dwarf) = reg.dwarf {
-                                res.write_str(";dwarf:")?;
-                                res.write_dec(dwarf)?;
+                                res.write_str(";dwarf:").await?;
+                                res.write_dec(dwarf).await?;
                             }
                             if let Some(generic) = reg.generic {
-                                res.write_str(";generic:")?;
+                                res.write_str(";generic:").await?;
                                 res.write_str(match generic {
                                     Generic::Pc => "pc",
                                     Generic::Sp => "sp",
@@ -80,32 +80,32 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                                     Generic::Arg6 => "arg6",
                                     Generic::Arg7 => "arg7",
                                     Generic::Arg8 => "arg8",
-                                })?;
+                                }).await?;
                             }
                             if let Some(c_regs) = reg.container_regs {
-                                res.write_str(";container-regs:")?;
-                                res.write_num(c_regs[0])?;
+                                res.write_str(";container-regs:").await?;
+                                res.write_num(c_regs[0]).await?;
                                 for reg in c_regs.iter().skip(1) {
-                                    res.write_str(",")?;
-                                    res.write_num(*reg)?;
+                                    res.write_str(",").await?;
+                                    res.write_num(*reg).await?;
                                 }
                             }
                             if let Some(i_regs) = reg.invalidate_regs {
-                                res.write_str(";invalidate-regs:")?;
-                                res.write_num(i_regs[0])?;
+                                res.write_str(";invalidate-regs:").await?;
+                                res.write_num(i_regs[0]).await?;
                                 for reg in i_regs.iter().skip(1) {
-                                    res.write_str(",")?;
-                                    res.write_num(*reg)?;
+                                    res.write_str(",").await?;
+                                    res.write_num(*reg).await?;
                                 }
                             }
-                            res.write_str(";")
+                            res.write_str(";").await
                         })(),
                         // In fact, this doesn't has to be E45! It could equally well be any
                         // other error code or even an eOk, eAck or eNack! It turns out that
                         // 0x45 == 69, so presumably the LLDB people were just having some fun
                         // here. For a little discussion on this and LLDB source code pointers,
                         // see https://github.com/daniel5151/gdbstub/pull/103#discussion_r888590197
-                        _ => res.write_str("E45"),
+                        _ => res.write_str("E45").await,
                     };
                     if let Err(e) = res {
                         err = Err(e);
