@@ -6,19 +6,19 @@ use crate::conn::ConnectionExt;
 impl Connection for TcpStream {
     type Error = std::io::Error;
 
-    fn write(&mut self, byte: u8) -> Result<(), Self::Error> {
+    async fn write(&mut self, byte: u8) -> Result<(), Self::Error> {
         use std::io::Write;
 
         Write::write_all(self, &[byte])
     }
 
-    fn write_all(&mut self, buf: &[u8]) -> Result<(), Self::Error> {
+    async fn write_all(&mut self, buf: &[u8]) -> Result<(), Self::Error> {
         use std::io::Write;
 
         Write::write_all(self, buf)
     }
 
-    fn flush(&mut self) -> Result<(), Self::Error> {
+    async fn flush(&mut self) -> Result<(), Self::Error> {
         use std::io::Write;
 
         Write::flush(self)
@@ -31,7 +31,7 @@ impl Connection for TcpStream {
 }
 
 impl ConnectionExt for TcpStream {
-    fn read(&mut self) -> Result<u8, Self::Error> {
+    async fn read(&mut self) -> Result<u8, Self::Error> {
         use std::io::Read;
 
         self.set_nonblocking(false)?;
