@@ -200,17 +200,17 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
             }
             Command::Breakpoints(cmd) => self.handle_breakpoints(res, target, cmd),
             Command::CatchSyscalls(cmd) => self.handle_catch_syscalls(res, target, cmd),
-            Command::ExtendedMode(cmd) => self.handle_extended_mode(res, target, cmd),
+            Command::ExtendedMode(cmd) => self.handle_extended_mode(res, target, cmd).await,
             Command::MonitorCmd(cmd) => self.handle_monitor_cmd(res, target, cmd).await,
-            Command::SectionOffsets(cmd) => self.handle_section_offsets(res, target, cmd),
+            Command::SectionOffsets(cmd) => self.handle_section_offsets(res, target, cmd).await,
             Command::ReverseCont(cmd) => self.handle_reverse_cont(res, target, cmd),
             Command::ReverseStep(cmd) => self.handle_reverse_step(res, target, cmd),
-            Command::MemoryMap(cmd) => self.handle_memory_map(res, target, cmd),
-            Command::HostIo(cmd) => self.handle_host_io(res, target, cmd),
-            Command::ExecFile(cmd) => self.handle_exec_file(res, target, cmd),
-            Command::Auxv(cmd) => self.handle_auxv(res, target, cmd),
-            Command::ThreadExtraInfo(cmd) => self.handle_thread_extra_info(res, target, cmd),
-            Command::LldbRegisterInfo(cmd) => self.handle_lldb_register_info(res, target, cmd),
+            Command::MemoryMap(cmd) => self.handle_memory_map(res, target, cmd).await,
+            Command::HostIo(cmd) => self.handle_host_io(res, target, cmd).await,
+            Command::ExecFile(cmd) => self.handle_exec_file(res, target, cmd).await,
+            Command::Auxv(cmd) => self.handle_auxv(res, target, cmd).await,
+            Command::ThreadExtraInfo(cmd) => self.handle_thread_extra_info(res, target, cmd).await,
+            Command::LldbRegisterInfo(cmd) => self.handle_lldb_register_info(res, target, cmd).await,
             // in the worst case, the command could not be parsed...
             Command::Unknown(cmd) => {
                 // HACK: if the user accidentally sends a resume command to a

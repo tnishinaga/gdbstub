@@ -353,7 +353,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                             })();
 
                             if let Err(e) = e {
-                                err = Err(e)
+                                err = Err(e);
                             }
                         })
                         .map_err(Error::TargetError)?;

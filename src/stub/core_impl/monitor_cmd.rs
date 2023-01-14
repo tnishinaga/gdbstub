@@ -22,7 +22,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                 let use_rle = ops.use_rle();
 
                 let mut err: Result<_, Error<T::Error, C::Error>> = Ok(());
-                let mut callback = |msg: &[u8]| {
+                let mut callback = async move |msg: &[u8]| {
                     // TODO: replace this with a try block (once stabilized)
                     let e = (async || {
                         let mut res = ResponseWriter::new(res.as_conn(), use_rle);
@@ -32,7 +32,7 @@ impl<T: Target, C: Connection> GdbStubImpl<T, C> {
                         Ok(())
                     })();
 
-                    if let Err(e) = e {
+                    if let Err(e) = e.await {
                         err = Err(e)
                     }
                 };
